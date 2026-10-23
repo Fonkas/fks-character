@@ -151,7 +151,7 @@ function Arrival.Play(index, opts)
         PointCamAtEntity(cam1, train, 0.0, 0.0, 1.0, true)
         RenderScriptCams(true, false, 0, true, true, 0)
 
-        UI.Send("cine", { on = true, title = loc.label, sub = cfg.Year, skip = cfg.AllowSkip })
+        UI.Cinematic({ title = loc.label, sub = cfg.Year, skip = cfg.AllowSkip and L("cine_skip") or nil })
         if not state.skipped then waitFade(false, 1500) end
 
         -- aproximação com travagem progressiva
@@ -168,7 +168,7 @@ function Arrival.Play(index, opts)
             Wait(0)
         end
         setSpeed(train, 0.0)
-        UI.Send("cine", { on = true })   -- esconde o cartão de título, mantém as barras
+        UI.Cinematic({})   -- esconde o cartão de título, mantém as barras
 
         if not state.skipped then Wait(1500) end
 
@@ -220,7 +220,7 @@ function Arrival.Play(index, opts)
         invoke(NATIVE.DeleteMissionTrain, Citizen.PointerValueIntInitialized(state.train))
         if DoesEntityExist(state.train) then DeleteEntity(state.train) end
     end
-    UI.Send("cine", { on = false })
+    UI.Cinematic(false)
     state.running = false
     SetEntityCollision(ped, true, true)
     FreezeEntityPosition(ped, false)

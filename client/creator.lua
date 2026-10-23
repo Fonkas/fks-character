@@ -524,23 +524,204 @@ local function randomLook()
     return skin, comps
 end
 
-local function sendState(full)
-    UI.Send(full and "creator" or "creator:values", {
-        tabs = full and buildSchema() or nil,
-        values = S.values,
-        counts = dynamicCounts(),
-        model = S.model,
-        identity = full and {
-            cfg = Config.Identity,
-            today = Today,
-            spawns = (not S.opts.edit) and Selection.payload and Selection.payload.spawns or nil,
-            kits = (not S.opts.edit) and Selection.payload and Selection.payload.kits or nil,
-            canCancel = not S.opts.firstCharacter,
-            edit = S.opts.edit and true or false,
-            genderLocked = S.genderLocked or false,
-            height = S.height,
-        } or nil,
-    })
+-- =====================================================================
+--  VISTA (desenhada pelo fks-core)
+-- =====================================================================
+
+local function ageOf(b)
+    local t = Today or { year = 1899, month = 1, day = 1 }
+    local age = t.year - b.year
+    if t.month < b.month or (t.month == b.month and t.day < b.day) then age = age - 1 end
+    return age
+end
+
+local function filled(v)
+    return type(v) == "string" and v:match("%S") and v or nil
+end
+
+-- Uma secção do esquema -> título + mostradores (opções em lista) + barras (valores contínuos)
+local function sectionNodes(sec, counts)
+    if not sec.controls or #sec.controls == 0 then return {} end
+    local lists, ranges, paired, prevLabel = {}, {}, false, ""
+    for _, ctl in ipairs(sec.controls) do
+        -- uma barra "sub" (intensidade de uma marca) usa o nome da opção anterior
+        local label = (ctl.sub and ctl.type == "range") and prevLabel or ctl.label
+        if not ctl.sub then prevLabel = ctl.label end
+        if ctl.type == "range" then
+            ranges[#ranges + 1] = {
+                kind = "slider", id = ctl.id, label = label, min = ctl.min, max = ctl.max, step = ctl.step,
+                value = S.values[ctl.id] or 0, format = (ctl.min == 0 and ctl.max == 1) and "percent" or "signed",
+            }
+        else
+            if ctl.sub then paired = true end
+            lists[#lists + 1] = {
+                id = ctl.id, label = label, value = S.values[ctl.id], count = counts[ctl.id] or ctl.count,
+                none = ctl.none, noneLabel = L("ctl_none"),
+            }
+        end
+    end
+    local out = { { type = "section", label = sec.title } }
+    if #lists > 0 then out[#out + 1] = { type = "dials", action = "cr:set", cols = paired and 2 or 3, items = lists } end
+    if #ranges > 0 then out[#out + 1] = { type = "stats", action = "cr:set", rows = ranges } end
+    return out
+end
+
+local function heightSlider()
+    local cfg = Config.Identity
+    return {
+        type = "slider", style = "field", name = "height", label = L("id_height"),
+        min = cfg.MinHeight, max = cfg.MaxHeight, step = 1, value = S.height,
+        format = "int", suffix = " cm", action = "cr:height", throttle = 120,
+    }
+end
+
+local function identityBody()
+    if S.opts.edit then
+        return { { type = "text", text = L("edit_text") }, heightSlider() }
+    end
+    local cfg, t = Config.Identity, Today or { year = 1899 }
+    return {
+        { type = "grid", cols = 2, children = {
+            { type = "input", name = "firstname", label = L("id_firstname"), max = cfg.NameMaxLength, live = true, action = "cr:name" },
+            { type = "input", name = "lastname", label = L("id_lastname"), max = cfg.NameMaxLength, live = true, action = "cr:name" },
+        } },
+        -- género fixo se foi escolhido na cutscene inicial
+        { type = "segmented", name = "model", label = L("id_gender"), value = S.model, locked = S.genderLocked or nil, action = "cr:model",
+          options = { { value = "mp_male", label = L("male"), icon = "male" }, { value = "mp_female", label = L("female"), icon = "female" } } },
+        { type = "date", id = "birth", name = "birth", label = L("id_birthdate"), value = S.birth,
+          minYear = t.year - cfg.MaxAge, maxYear = t.year - cfg.MinAge, action = "cr:birth",
+          labels = { day = L("id_day"), month = L("id_month"), year = L("id_year") },
+          note = L("id_age_preview", ageOf(S.birth)) },
+        heightSlider(),
+        { type = "grid", cols = 2, children = {
+            { type = "input", name = "nationality", label = L("id_nationality"), optional = not cfg.RequireNationality, max = cfg.NationalityMaxLength },
+            { type = "input", name = "birthplace", label = L("id_birthplace"), optional = not cfg.RequireBirthplace, max = cfg.BirthplaceMaxLength },
+        } },
+        { type = "textarea", name = "biography", label = L("id_biography"), optional = not cfg.RequireBiography, max = cfg.BiographyMaxLength },
+    }
+end
+
+-- Resumo do "Finalizar" a partir dos valores do formulário
+local function summaryItems(v)
+    local b = type(v.birth) == "table" and v.birth or S.birth
+    return {
+        { label = L("id_firstname"), value = filled(v.firstname) or "—" },
+        { label = L("id_lastname"), value = filled(v.lastname) or "—" },
+        { label = L("id_birthdate"), value = ("%02d/%02d/%d"):format(b.day, b.month, b.year) },
+        { label = L("sel_age"), value = ("%d %s"):format(ageOf(b), L("sel_years")) },
+        { label = L("id_gender"), value = L(S.model == "mp_male" and "male" or "female") },
+        { label = L("id_height"), value = ("%d cm"):format(tonumber(v.height) or S.height) },
+        { label = L("id_nationality"), value = filled(v.nationality) },
+        { label = L("id_birthplace"), value = filled(v.birthplace) },
+    }
+end
+
+local function finishBody()
+    local body = {
+        { type = "text", text = L("finish_text") },
+        { type = "kv", id = "summary", items = summaryItems({}) },
+    }
+    local spawns = Selection.payload and Selection.payload.spawns
+    if spawns and #spawns > 0 then
+        local options = {}
+        for i, label in ipairs(spawns) do options[i] = { value = i, label = label } end
+        body[#body + 1] = { type = "section", label = L("act_spawn") }
+        body[#body + 1] = { type = "segmented", style = "list", name = "spawn", value = 1, options = options }
+    end
+    -- a ação de criar está no botão dourado em baixo
+    body[#body + 1] = { type = "text", text = L("finish_hint") }
+    return body
+end
+
+-- Ecrã dos kits iniciais (página em ecrã inteiro, antes de criar)
+local function kitsPage(kits)
+    local function img(name) return name and (kits.imagePath or ""):gsub("%%s", name) or nil end
+    local cards = {}
+    for _, kit in ipairs(kits.list) do
+        local lines = {}
+        for _, it in ipairs(kit.items or {}) do
+            lines[#lines + 1] = { img = img(it.item), amount = it.amount, label = it.label or it.item }
+        end
+        cards[#cards + 1] = {
+            value = kit.id, title = kit.label, text = kit.description or "",
+            img = img(kit.icon or (kit.items and kit.items[1] and kit.items[1].item)), lines = lines,
+        }
+    end
+    return {
+        layout = "center", back = false, camera = false, hints = {},
+        eyebrow = L("kits_eyebrow"), heading = L("kits_title"), desc = L("kits_desc"),
+        body = { { type = "cards", name = "kit", items = cards, submit = { action = "cr:finish" } } },
+        footer = {
+            main = false,
+            buttons = {
+                { type = "button", label = L("act_back"), style = "ghost", go = "finish" },
+                { type = "button", label = L("kits_confirm"), style = "main", iconRight = "fwd", requires = "kit", action = "cr:finish" },
+            },
+        },
+    }
+end
+
+local function creatorView()
+    local edit = S.opts.edit
+    local tabs = buildSchema()
+    if edit then
+        -- /skinmenu: sem identidade nem "Finalizar"; o separador da identidade só tem a altura
+        local kept = {}
+        for _, tab in ipairs(tabs) do
+            if tab.id ~= "finish" then kept[#kept + 1] = tab end
+            if tab.id == "identity" then tab.label = L("tab_height") end
+        end
+        tabs = kept
+    end
+
+    local counts = dynamicCounts()
+    local pages, chips = {}, {}
+    for i, tab in ipairs(tabs) do
+        chips[i] = { page = tab.id, label = tab.label }
+        local body
+        if tab.id == "identity" then
+            body = identityBody()
+        elseif tab.id == "finish" then
+            body = finishBody()
+        else
+            body = {}
+            for _, sec in ipairs(tab.sections or {}) do
+                for _, node in ipairs(sectionNodes(sec, counts)) do body[#body + 1] = node end
+            end
+        end
+        -- no primeiro separador, "anterior" volta à seleção (ou sai do /skinmenu)
+        local prev = tabs[i - 1] and tabs[i - 1].id or ((not S.opts.firstCharacter) and { action = "cr:cancel" } or nil)
+        pages[tab.id] = {
+            title = tab.label,
+            count = ("%d / %d"):format(i, #tabs),
+            desc = L((edit and tab.id == "identity") and "desc_edit_identity" or ("desc_" .. tab.id)),
+            nav = { prev = prev, next = tabs[i + 1] and tabs[i + 1].id or nil },
+            body = body,
+        }
+    end
+
+    if not edit then
+        pages.finish.footer = { main = { label = L("act_create"), action = "cr:finish", pulse = true } }
+        local kits = Selection.payload and Selection.payload.kits
+        if kits and kits.list and #kits.list > 0 then pages.kits = kitsPage(kits) end
+    end
+
+    return {
+        eyebrow = L(edit and "edit_eyebrow" or "cr_eyebrow"),
+        title = edit and L("edit_title") or (S.title or L("cr_new")),
+        page = S.tab,
+        tabs = chips,
+        pages = pages,
+        camera = UI.CameraRail(Config.Cameras.TabPresets[S.tab] or "general"),
+        footer = {
+            buttons = {
+                { type = "button", label = L("act_random"), icon = "dice", style = "ghost", small = true, action = "cr:random" },
+                { type = "button", label = L("act_reset"), icon = "undo", style = "ghost", small = true, action = "cr:reset" },
+            },
+            -- botão dourado: leva ao "Finalizar" (lá cria a personagem) ou guarda no /skinmenu
+            main = edit and { label = L("edit_save"), action = "cr:save", pulse = true } or { label = L("act_finish"), go = "finish" },
+        },
+    }
 end
 
 local function placePed(p)
@@ -590,6 +771,9 @@ function Creator.Open(opts)
     Creator.active = true
     opts = opts or {}
     S = { opts = opts, values = {}, height = (opts.edit and opts.edit.height) or Config.Identity.DefaultHeight }
+    S.tab = opts.edit and "face" or "identity"
+    local year = (Today and Today.year or 1899) - math.max(Config.Identity.MinAge, 25)
+    S.birth = { day = 1, month = 1, year = year }
     if not IsScreenFadedOut() then
         DoScreenFadeOut(500)
         repeat Wait(0) until IsScreenFadedOut()
@@ -610,8 +794,7 @@ function Creator.Open(opts)
         setModel(chosen or "mp_male")
     end
 
-    sendState(true)
-    UI.Focus(true)
+    UI.Open(creatorView(), { closable = false })
     Wait(300)
     DoScreenFadeIn(1500)
 end
@@ -624,8 +807,7 @@ end
 -- Fecha o modo /skinmenu e devolve o jogador ao sítio onde estava
 local function endEdit(skin, comps)
     local edit = S.opts.edit
-    UI.Send("close")
-    UI.Focus(false)
+    UI.Close()
     DoScreenFadeOut(600)
     repeat Wait(0) until IsScreenFadedOut()
     Cam.Stop()
@@ -655,7 +837,6 @@ RegisterNetEvent("fks-character:client:skinMenu", function(payload)
     local p = PlayerPedId()
     local c = GetEntityCoords(p)
     payload.returnTo = vector4(c.x, c.y, c.z, GetEntityHeading(p))
-    UI.Send("init", { locale = GetLocaleTable() })
     Creator.Open({ edit = payload })
 end)
 
@@ -671,14 +852,14 @@ end)
 
 UI.On("cr:model", function(data)
     if not Creator.active or S.genderLocked or S.opts.edit then return { ok = false } end
-    local model = data.model == "mp_female" and "mp_female" or "mp_male"
+    local model = data.value == "mp_female" and "mp_female" or "mp_male"
     if model == S.model then return { ok = true } end
     DoScreenFadeOut(300)
     repeat Wait(0) until IsScreenFadedOut()
     setModel(model)
-    sendState(true)
     DoScreenFadeIn(500)
-    return { ok = true }
+    -- outro modelo = outras opções (barba, maquilhagem, roupa): a vista é refeita, o formulário fica
+    return { ok = true, view = creatorView() }
 end)
 
 UI.On("cr:random", function()
@@ -686,8 +867,7 @@ UI.On("cr:random", function()
     S.skin, S.comps = randomLook()
     applyAll()
     valuesFromLook()
-    sendState(false)
-    return { ok = true }
+    return { ok = true, view = creatorView() }
 end)
 
 UI.On("cr:reset", function()
@@ -695,8 +875,24 @@ UI.On("cr:reset", function()
     S.skin, S.comps = copy(S.initial.skin), copy(S.initial.comps)
     applyAll()
     valuesFromLook()
-    sendState(false)
-    return { ok = true }
+    return { ok = true, view = creatorView() }
+end)
+
+-- Nome escrito -> título do painel
+UI.On("cr:name", function(data)
+    if not Creator.active then return end
+    local v = data.values or {}
+    local full = ("%s %s"):format(filled(v.firstname) or "", filled(v.lastname) or ""):match("^%s*(.-)%s*$")
+    S.title = full ~= "" and full or nil
+    return { patch = { title = { text = S.title or L("cr_new") } } }
+end)
+
+-- Data de nascimento -> idade por baixo
+UI.On("cr:birth", function(data)
+    if not Creator.active or type(data.value) ~= "table" then return end
+    local b = data.value
+    S.birth = { day = tonumber(b.day) or 1, month = tonumber(b.month) or 1, year = tonumber(b.year) or S.birth.year }
+    return { patch = { birth = { note = L("id_age_preview", ageOf(S.birth)) } } }
 end)
 
 UI.On("cr:height", function(data)
@@ -709,17 +905,46 @@ UI.On("cr:height", function(data)
     return { ok = true }
 end)
 
-UI.On("cr:tab", function(data)
-    local preset = Config.Cameras.TabPresets[data.tab]
-    if preset then Cam.SetPreset(preset) end
-    return { ok = true }
+-- Mudança de separador: câmara do separador e, no "Finalizar", o resumo atualizado
+UI.On("page", function(data)
+    if not Creator.active then return end
+    S.tab = data.to
+    local res = { patch = {} }
+    local preset = Config.Cameras.TabPresets[data.to]
+    if preset then
+        Cam.SetPreset(preset)
+        res.patch.camera = { preset = preset }
+    end
+    if data.to == "finish" then res.patch.summary = { items = summaryItems(data.values or {}) } end
+    return res
 end)
 
-UI.On("cr:validate", function(data)
-    local identity, err = Validate.Identity(data.identity, Today)
-    if not identity then return { ok = false, error = err } end
-    return { ok = true, age = identity.age }
-end)
+-- erro da validação -> campo do formulário onde aparece
+local ERR_FIELD = {
+    err_date_invalid = "birth", err_date_future = "birth", err_age_min = "birth", err_age_max = "birth",
+    err_height = "height", err_gender = "model",
+    err_nationality_required = "nationality", err_nationality_length = "nationality", err_nationality_invalid = "nationality",
+    err_birthplace_required = "birthplace", err_birthplace_length = "birthplace", err_birthplace_invalid = "birthplace",
+    err_biography_required = "biography", err_biography_length = "biography", err_biography_invalid = "biography",
+}
+
+local function errorField(err, identity)
+    if ERR_FIELD[err] then return ERR_FIELD[err] end
+    if tostring(err):find("^err_name") then
+        return Validate.Name(identity.firstname) and "lastname" or "firstname"
+    end
+end
+
+local function identityFrom(v)
+    local b = type(v.birth) == "table" and v.birth or S.birth
+    local function text(x) return type(x) == "string" and x or "" end
+    return {
+        firstname = text(v.firstname), lastname = text(v.lastname),
+        day = tonumber(b.day), month = tonumber(b.month), year = tonumber(b.year),
+        height = tonumber(v.height) or S.height, model = S.model,
+        nationality = text(v.nationality), birthplace = text(v.birthplace), biography = text(v.biography),
+    }
+end
 
 UI.On("cr:cancel", function()
     if not Creator.active or S.opts.firstCharacter then return { ok = false } end
@@ -729,8 +954,7 @@ UI.On("cr:cancel", function()
         endEdit(original.skin, original.comps)
         return { ok = true }
     end
-    UI.Send("close")
-    UI.Focus(false)
+    UI.Close()
     DoScreenFadeOut(800)
     repeat Wait(0) until IsScreenFadedOut()
     Cam.Stop()
@@ -741,25 +965,36 @@ UI.On("cr:cancel", function()
 end)
 
 UI.On("cr:finish", function(data)
-    if not Creator.active then return { ok = false, error = "err_generic" } end
-    local identity = type(data.identity) == "table" and data.identity or {}
-    identity.model = S.model
-    identity.height = tonumber(identity.height) or S.height
+    if not Creator.active or S.opts.edit then return { ok = false, error = "err_generic" } end
+    local v = data.values or {}
+    local identity = identityFrom(v)
     local checked, err = Validate.Identity(identity, Today)
-    if not checked then return { ok = false, error = err } end
+    if not checked then
+        local field = errorField(err, identity)
+        if field then return { errors = { [field] = L(err) } } end   -- volta ao campo, na Identidade
+        return { ok = false, error = err }
+    end
 
-    UI.Send("loading", { text = L("creating") })
+    -- há kits iniciais: primeiro escolhe-se um (o ecrã dos kits volta a chamar esta ação)
+    local kits = Selection.payload and Selection.payload.kits
+    local kit = type(v.kit) == "string" and v.kit or nil
+    if kits and kits.list and #kits.list > 0 and not kit then return { go = "kits" } end
+
+    UI.Loading(L("creating"))
     local res = ServerCall("create", {
         identity = identity,
         skin = S.skin,
         comps = S.comps,
-        spawn = tonumber(data.spawn),
-        kit = type(data.kit) == "string" and data.kit or nil,
+        spawn = tonumber(v.spawn),
+        kit = kit,
     }, Config.Session.LoadTimeout + 5000)
 
     if not res or not res.ok then
-        UI.Send("loading", false)
-        return res or { ok = false, error = "err_generic" }
+        UI.Loading(false)
+        res = res or { ok = false, error = "err_generic" }
+        local field = res.error and errorField(res.error, identity)
+        if field then return { errors = { [field] = L(res.error) } } end
+        return res
     end
 
     PlaySoundFrontend("Ready_Up_Flash", "RDRO_In_Game_Menu_Sounds", true, 0)
@@ -773,22 +1008,15 @@ end)
 -- Modo /skinmenu: guardar a nova aparência
 UI.On("cr:save", function(data)
     if not Creator.active or not S.opts.edit then return { ok = false, error = "err_generic" } end
-    UI.Send("loading", { text = L("saving") })
+    UI.Loading(L("saving"))
     local res = ServerCall("skinmenu:save", {
-        skin = S.skin, comps = S.comps, height = tonumber(data.height) or S.height,
+        skin = S.skin, comps = S.comps, height = tonumber((data.values or {}).height) or S.height,
     })
     if not res or not res.ok then
-        UI.Send("loading", false)
+        UI.Loading(false)
         return res or { ok = false, error = "err_generic" }
     end
+    UI.Loading(false)
     endEdit(res.skin, res.comps)
     return { ok = true }
 end)
-
--- Controlos de câmara (seleção e criador)
-UI.On("cam:preset", function(data) Cam.SetPreset(data.name) return { ok = true } end)
-UI.On("cam:rotate", function(data) Cam.Rotate(math.max(-90, math.min(90, tonumber(data.deg) or 0))) return { ok = true } end)
-UI.On("cam:zoom", function(data) Cam.Zoom((tonumber(data.dir) or 0) > 0 and 1 or -1) return { ok = true } end)
-UI.On("cam:lift", function(data) Cam.Lift((tonumber(data.dir) or 0) > 0 and 1 or -1) return { ok = true } end)
-UI.On("cam:pan", function(data) Cam.Pan((tonumber(data.dir) or 0) > 0 and 1 or -1) return { ok = true } end)
-UI.On("cam:reset", function() Cam.Reset() return { ok = true } end)

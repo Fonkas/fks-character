@@ -136,29 +136,97 @@ local function showPreview(charId)
     Selection.current = charId
 end
 
--- Dados para a NUI (sem skin/comps, que só interessam ao Lua)
-local function uiCharacters()
-    local out = {}
-    for _, c in ipairs(Selection.payload.characters) do
-        out[#out + 1] = {
-            charId = Config.Selection.ShowCharId and c.charId or nil, key = c.charId,
-            firstname = c.firstname, lastname = c.lastname, age = c.age, gender = c.gender,
-            job = c.job, money = c.money, gold = c.gold, birthdate = c.birthdate,
-            nationality = c.nationality, isDead = c.isDead,
-        }
-    end
-    return out
+-- =====================================================================
+--  VISTA (desenhada pelo fks-core)
+-- =====================================================================
+
+local function fmtDate(iso)
+    local y, m, d = tostring(iso or ""):match("^(%d+)-(%d+)-(%d+)")
+    return y and ("%s/%s/%s"):format(d, m, y) or nil
 end
 
-local function pushToUI()
-    UI.Send("selection", {
-        characters = uiCharacters(),
-        slots = Selection.payload.slots,
-        canDelete = Selection.payload.canDelete,
-        canRename = Selection.payload.canRename,
-        tebex = Selection.payload.tebex,
-        selected = Selection.current,
-    })
+local function characterRow(c, p)
+    local full = ("%s %s"):format(c.firstname, c.lastname)
+    local sub = {}
+    if c.age then sub[#sub + 1] = ("%s %s"):format(c.age, L("sel_years")) end
+    sub[#sub + 1] = L(c.gender)
+    if c.job and c.job ~= "" then sub[#sub + 1] = c.job end
+
+    local actions = { { label = L("sel_play"), action = "sel:play" } }
+    if p.canRename then
+        actions[#actions + 1] = {
+            label = L("sel_rename"), style = "ghost", action = "sel:rename",
+            prompt = {
+                title = L("ren_title"), ok = L("confirm"), cancel = L("cancel"),
+                fields = {
+                    { name = "firstname", label = L("id_firstname"), value = c.firstname, max = 40, required = true },
+                    { name = "lastname", label = L("id_lastname"), value = c.lastname, max = 40, required = true },
+                },
+            },
+        }
+    end
+    if p.canDelete then
+        actions[#actions + 1] = {
+            label = L("sel_delete"), style = "ghost", action = "sel:delete",
+            prompt = {
+                title = L("del_title"), danger = true, ok = L("del_confirm"), cancel = L("cancel"),
+                text = L("del_text", "**" .. full .. "**"), note = L("del_confirm_hint"), cols = 1,
+                fields = { { name = "confirm", placeholder = full, match = full } },
+            },
+        }
+    end
+
+    return {
+        value = c.charId,
+        title = full,
+        flag = c.isDead and "✝" or nil,
+        tag = Config.Selection.ShowCharId and ("#" .. c.charId) or nil,
+        sub = table.concat(sub, " · "),
+        details = { {
+            type = "kv",
+            items = {
+                { label = L("sel_birth"), value = fmtDate(c.birthdate) },
+                { label = L("sel_nationality"), value = c.nationality },
+                { label = L("sel_job"), value = c.job },
+                { label = L("sel_money"), value = c.money and ("$%.2f"):format(tonumber(c.money) or 0) or nil },
+                { label = L("sel_gold"), value = c.gold and ("%.2f"):format(tonumber(c.gold) or 0) or nil, tone = "gold" },
+            },
+        } },
+        actions = actions,
+    }
+end
+
+local function selectionView()
+    local p = Selection.payload
+    local items = {}
+    for _, c in ipairs(p.characters) do items[#items + 1] = characterRow(c, p) end
+    for _ = #p.characters + 1, p.slots do
+        items[#items + 1] = { variant = "empty", title = L("sel_create"), sub = L("sel_empty"), action = "sel:create" }
+    end
+    -- modo Tebex: um slot bloqueado que se desbloqueia com uma compra
+    if p.tebex then
+        items[#items + 1] = {
+            variant = "locked", title = L("tebex_slot"), sub = L("tebex_slot_sub"), action = "sel:tebex",
+            prompt = {
+                title = L("tebex_title"), text = L("tebex_text"), copy = p.tebex.storeUrl, note = L("tebex_hint"),
+                ok = L("tebex_redeem"), cancel = L("cancel"), cols = 1,
+                fields = { { name = "code", placeholder = "tbx-...", pattern = "tbx-[\\w-]+" } },
+            },
+        }
+    end
+    return {
+        eyebrow = "FKS · " .. L("sel_eyebrow"),
+        title = L("sel_title"),
+        subtitle = L("sel_subtitle"),
+        count = ("%d / %d"):format(#p.characters, p.slots),
+        camera = { drag = true, wheel = true },
+        body = { { type = "list", id = "chars", action = "sel:preview", selected = Selection.current, items = items } },
+    }
+end
+
+-- update = true: o painel já está aberto, só muda o conteúdo
+local function pushToUI(update)
+    if update then UI.Update(selectionView()) else UI.Open(selectionView(), { closable = false }) end
 end
 
 function Selection.Open(payload)
@@ -188,7 +256,6 @@ function Selection.Open(payload)
     DoScreenFadeIn(1500)
 
     pushToUI()
-    UI.Focus(true)
 end
 
 -- Voltar à seleção (ex.: cancelar o criador)
@@ -234,8 +301,8 @@ function LoadCharacterIntoWorld(res, isNew)
     finished = true
 
     -- Personagem nova: senta-se, pose, foto a preto e branco
-    UI.Send("close")
-    UI.Focus(false)
+    UI.Loading(false)
+    UI.Close()
     if isNew and success then Photo.Play(PlayerPedId()) end
 
     Cam.Stop()
@@ -243,8 +310,6 @@ function LoadCharacterIntoWorld(res, isNew)
     Creator.Cleanup()
     Scene.Leave()
     Look.ReleaseAll(PlayerPedId())
-    UI.Send("close")
-    UI.Focus(false)
     CharId = res.charId
 
     if not success then
@@ -270,12 +335,12 @@ end
 function Selection.Play(charId)
     if Selection.busy then return { ok = false, error = "err_busy" } end
     Selection.busy = true
-    UI.Send("loading", { text = L("sel_loading") })
+    UI.Loading(L("sel_loading"))
 
     local res = ServerCall("select", { charId = charId })
     if not res or not res.ok then
         Selection.busy = false
-        UI.Send("loading", false)
+        UI.Loading(false)
         return res or { ok = false, error = "err_generic" }
     end
 
@@ -292,14 +357,14 @@ end
 -- =====================================================================
 
 UI.On("sel:preview", function(data)
-    local charId = tonumber(data.key)
+    local charId = tonumber(data.value)
     if not charId or charId == Selection.current or Selection.busy then return { ok = true } end
     showPreview(charId)
     return { ok = true }
 end)
 
 UI.On("sel:play", function(data)
-    local charId = tonumber(data.key)
+    local charId = tonumber(data.value)
     if not charId then return { ok = false, error = "err_generic" } end
     return Selection.Play(charId)
 end)
@@ -308,8 +373,7 @@ UI.On("sel:create", function()
     if Selection.busy then return { ok = false, error = "err_busy" } end
     if #Selection.payload.characters >= Selection.payload.slots then return { ok = false, error = "err_slots" } end
     Selection.busy = true
-    UI.Send("close")
-    UI.Focus(false)
+    UI.Close()
     DoScreenFadeOut(800)
     repeat Wait(0) until IsScreenFadedOut()
     Cam.Stop()
@@ -331,8 +395,7 @@ local function applyPayload(res)
         end
     end
     if #res.payload.characters == 0 then
-        UI.Send("close")
-        UI.Focus(false)
+        UI.Close()
         DoScreenFadeOut(800)
         repeat Wait(0) until IsScreenFadedOut()
         Cam.Stop()
@@ -343,13 +406,13 @@ local function applyPayload(res)
     if not findChar(Selection.current) then
         showPreview(res.payload.characters[1].charId)
     end
-    pushToUI()
+    pushToUI(true)
     return { ok = true }
 end
 
 UI.On("sel:delete", function(data)
     if Selection.busy then return { ok = false, error = "err_busy" } end
-    local res = ServerCall("delete", { charId = tonumber(data.key), confirm = tostring(data.confirm or "") })
+    local res = ServerCall("delete", { charId = tonumber(data.value), confirm = tostring((data.values or {}).confirm or "") })
     if res and res.ok then
         PlaySoundFrontend("TITLE_SCREEN_EXIT", "DEATH_FAIL_RESPAWN_SOUNDS", true, 0)
     end
@@ -358,16 +421,19 @@ end)
 
 UI.On("sel:tebex", function(data)
     if Selection.busy then return { ok = false, error = "err_busy" } end
-    local res = ServerCall("tebex:redeem", { code = tostring(data.code or "") }, 20000)
+    UI.Loading(L("tebex_checking"))
+    local res = ServerCall("tebex:redeem", { code = tostring((data.values or {}).code or "") }, 20000)
+    UI.Loading(false)
     if res and res.ok then
         PlaySoundFrontend("Ready_Up_Flash", "RDRO_In_Game_Menu_Sounds", true, 0)
-        UI.Send("toast", { type = "info", text = L("tebex_ok", res.slots or 1) })
+        UI.Toast(L("tebex_ok", res.slots or 1), "success")
     end
     return applyPayload(res)
 end)
 
 UI.On("sel:rename", function(data)
     if Selection.busy then return { ok = false, error = "err_busy" } end
-    local res = ServerCall("rename", { charId = tonumber(data.key), firstname = data.firstname, lastname = data.lastname })
+    local v = data.values or {}
+    local res = ServerCall("rename", { charId = tonumber(data.value), firstname = v.firstname, lastname = v.lastname })
     return applyPayload(res)
 end)

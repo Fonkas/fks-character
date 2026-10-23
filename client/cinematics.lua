@@ -61,7 +61,7 @@ local function speak(ped, line)
     end)
 end
 
--- Escolha feita pela NUI (TAB/setas/rato e ENTER/clique) — ver UI.On("intro:*") abaixo
+-- Escolha feita no UI.Choose do fks-core (TAB/setas/rato e ENTER/clique), com as teclas do jogo como reserva
 local choice = { active = false, sel = 1, confirmed = false }
 
 local function camAt(point, eyeHeight, fov)
@@ -139,7 +139,7 @@ function Intro.Play()
         fade(false, 1200)
 
         for _, line in ipairs(cfg.lines or {}) do
-            UI.Send("subtitle", { text = L(line.text) })  -- chave de tradução ou texto direto
+            UI.Subtitle(L(line.text))  -- chave de tradução ou texto direto
             if npc then speak(npc, line.speech) end
             local untilT = GetGameTimer() + (line.time or 4000)
             while GetGameTimer() < untilT do
@@ -147,7 +147,7 @@ function Intro.Play()
                 Wait(0)
             end
         end
-        UI.Send("subtitle", false)
+        UI.Subtitle()
 
         -- Plano 2: vira-se para o homem e a mulher
         local doorCam = camAt(cfg.coupleCam, eye, 42.0)
@@ -168,7 +168,22 @@ function Intro.Play()
         choice.active, choice.sel, choice.confirmed = true, 1, false
         local current = doorCam
         local shown = 0
-        UI.Focus(true)
+        CreateThread(function()
+            local value = UI.Choose({
+                selected = order[1],
+                options = {
+                    { value = "mp_male", label = L("male"), icon = "male" },
+                    { value = "mp_female", label = L("female"), icon = "female" },
+                },
+                hints = { { "TAB", L("choose_switch") }, { "ENTER", L("choose_confirm") } },
+            }, function(v)
+                if choice.active then choice.sel = v == "mp_female" and 2 or 1 end
+            end)
+            if value and choice.active then
+                choice.sel = value == "mp_female" and 2 or 1
+                choice.confirmed = true
+            end
+        end)
         while not choice.confirmed do
             -- teclas do jogo como reserva (se o foco da NUI falhar)
             if pressed(KEY.toggle, KEY.left, KEY.right) then choice.sel = choice.sel == 1 and 2 or 1 end
@@ -180,22 +195,19 @@ function Intro.Play()
                 SetCamActiveWithInterp(aimCams[choice.sel], current, 700, 1, 1)
                 current = aimCams[choice.sel]
                 shown = choice.sel
-                UI.Send("choose", { on = true, selected = order[choice.sel] })
             end
             Wait(0)
         end
-        UI.Focus(false)
+        UI.Choose(false)   -- fecha a escolha se foram as teclas do jogo a confirmar
         PlaySoundFrontend("SELECT", "RDRO_Character_Creator_Sounds", true, 0)
         chosen = order[choice.sel]
-        UI.Send("choose", { on = false })
         fade(true, 700)
     end)
 
     choice.active = false
-    UI.Focus(false)
     if not ok then print(("^3[fks-character] intro cancelada: %s^7"):format(tostring(err))) end
-    UI.Send("subtitle", false)
-    UI.Send("choose", { on = false })
+    UI.Subtitle()
+    UI.Choose(false)
     if not IsScreenFadedOut() then fade(true, 400) end
     for _, ped in ipairs(spawned) do
         Look.Release(ped)
@@ -209,23 +221,6 @@ function Intro.Play()
     return chosen
 end
 
-UI.On("intro:select", function(data)
-    if not choice.active then return { ok = false } end
-    choice.sel = data.model == "mp_female" and 2 or 1
-    return { ok = true }
-end)
-
-UI.On("intro:toggle", function()
-    if not choice.active then return { ok = false } end
-    choice.sel = choice.sel == 1 and 2 or 1
-    return { ok = true }
-end)
-
-UI.On("intro:confirm", function()
-    if not choice.active then return { ok = false } end
-    choice.confirmed = true
-    return { ok = true }
-end)
 
 -- Pose final na cadeira + efeito de foto
 function Photo.Play(ped)
@@ -286,7 +281,11 @@ function Photo.Play(ped)
         fade(false, 1200)
         PlaySoundFrontend("Ready_Up_Flash", "RDRO_In_Game_Menu_Sounds", true, 0)
         local total = cfg.time or 20000
-        UI.Send("photo", { on = true, seconds = math.floor(total / 1000) })
+        UI.Caption({
+            text = L("photo_text"),
+            hints = { { "ENTER", L("photo_continue") } },
+            seconds = math.floor(total / 1000),
+        })
 
         local untilT = GetGameTimer() + total
         Wait(1500) -- evita saltar com o mesmo ENTER que criou a personagem
@@ -297,7 +296,7 @@ function Photo.Play(ped)
     end)
     if not ok then print(("^3[fks-character] momento da foto cancelado: %s^7"):format(tostring(err))) end
 
-    UI.Send("photo", { on = false })
+    UI.Caption(false)
     fade(true, 800)
     if cfg.effect then AnimpostfxStop(cfg.effect) end
     pcall(TaskClearLookAt, ped)

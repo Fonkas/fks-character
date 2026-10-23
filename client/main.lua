@@ -10,7 +10,6 @@ RegisterNetEvent("fks-character:client:open", function(payload)
     ShutdownLoadingScreen()
     ShutdownLoadingScreenNui()
     pcall(function() exports.spawnmanager:setAutoSpawn(false) end)
-    UI.Send("init", { locale = GetLocaleTable() })
     Selection.Open(payload)
 end)
 
@@ -139,7 +138,7 @@ AddEventHandler("onResourceStop", function(name)
     Selection.DeletePeds()
     Look.ReleaseAll(PlayerPedId())
     Cam.Stop()
-    UI.Focus(false)
+    -- o painel é do fks-core: fecha-se sozinho quando este recurso pára
     if Scene.active then
         Scene.Leave()
         Creator.Cleanup()

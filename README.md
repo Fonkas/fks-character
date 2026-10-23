@@ -23,6 +23,7 @@ Multicharacter, character creator and starter experience for **RedM** with **VOR
 
 | Resource | |
 |---|---|
+| [fks-core](https://github.com/Fonkas/fks-core) **2.1.0+** | interface (every FKS script shares one UI) |
 | [vorp_core](https://github.com/VORPCORE/vorp_core) | framework |
 | [vorp_inventory](https://github.com/VORPCORE/vorp_inventory) | starter kit items |
 | [oxmysql](https://github.com/overextended/oxmysql) | database |
@@ -40,6 +41,7 @@ so resources that depend on it keep starting).
 2. In `server.cfg`, **remove** `ensure vorp_character` and start fks-character after vorp_core:
    ```cfg
    ensure oxmysql
+   ensure fks-core
    ensure vorp_core
    ensure vorp_inventory
    ensure fks-character
@@ -184,7 +186,7 @@ To update: download the new release and replace everything **except** your `conf
 ## Credits
 
 - Clothing and hair hash tables (`shared/data/`): [VORP vorp_character](https://github.com/VORPCORE/vorp_character-lua) - GPL-2.0
-- Fonts: [Rye](https://fonts.google.com/specimen/Rye) and [Alegreya](https://fonts.google.com/specimen/Alegreya) - SIL Open Font License (see `html/fonts/OFL.txt`)
+- Interface: drawn by [fks-core](https://github.com/Fonkas/fks-core) (fonts and their licenses live there)
 - Native, scenario and interior references: [femga/rdr3_discoveries](https://github.com/femga/rdr3_discoveries)
 
 ---
@@ -206,4 +208,3 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program (see [`LICENSE`](LICENSE)). If not, see <https://www.gnu.org/licenses/>.
 
-The fonts in `html/fonts/` keep their own license (SIL Open Font License 1.1, see `html/fonts/OFL.txt`).

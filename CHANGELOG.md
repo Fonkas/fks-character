@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+- **The interface is now drawn by fks-core** (shared FKS UI). fks-character no longer ships its own HTML, CSS,
+  JS or fonts, so the server runs one NUI for every FKS script and the look follows `Config.Theme` in fks-core.
+- **Requires fks-core 2.1.0+**: add `ensure fks-core` before `ensure fks-character` in server.cfg.
+- Same screens and flow as before (selection, creator, kits, intro, photo, train). The identity form errors now
+  jump to the field, and the gender pick also accepts the arrow keys and A / D.
+
 ## 1.0.0
 - First release.
 - Multicharacter selection: the player's characters sit at a table inside the Lemoyne moonshine shack.

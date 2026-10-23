@@ -6,14 +6,18 @@ lua54 'yes'
 name 'fks-character'
 author 'Fonkas'
 description 'Multicharacter, character creator and starter experience for RedM (VORP)'
-version '1.0.0'
+version '1.1.0'
 license 'GPL-2.0' -- see LICENSE
 -- fks-character  Copyright (C) 2026 Fonkas
 
 -- Replaces vorp_character: the vorp_core character events are handled here.
 provide 'vorp_character'
 
+-- The interface is drawn by fks-core (shared FKS UI): this resource ships no HTML of its own.
+fks_core_version '2.1.0'
+
 shared_scripts {
+    '@fks-core/import.lua',
     'config.lua',
     'locales/*.lua',
     'shared/locale.lua',
@@ -52,17 +56,8 @@ server_scripts {
     'server/version.lua',
 }
 
-ui_page 'html/index.html'
-
-files {
-    'html/index.html',
-    'html/style.css',
-    'html/app.js',
-    'html/panel.png',
-    'html/fonts/*.woff2',
-}
-
 dependencies {
+    'fks-core',
     'vorp_core',
     'oxmysql',
 }
