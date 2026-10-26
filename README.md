@@ -117,9 +117,16 @@ Config.Slots = { Mode = "free" }   -- or "tebex"
 
 ### Starter kits
 ```lua
-Config.StarterKits = { Enabled = true, Kits = { ... } }
+items = {
+    { item = "bread", label = "item_bread", amount = 10 },                     -- inventory item
+    { weapon = "WEAPON_REVOLVER_CATTLEMAN", label = "Cattleman", amount = 1,
+      ammo = { AMMO_REVOLVER = 24 } },                                          -- weapon (+ optional ammo)
+    { weapon = "WEAPON_LASSO_REINFORCED", label = "Lasso", amount = 1 },
+},
 ```
-`Enabled = false` removes the kit screen. Items are given once per character.
+`Enabled = false` removes the kit screen. Kits are given once per character.
+Items must exist in your `items` table (the console warns on start if not); weapons use the
+names from vorp_inventory `config/weapons.lua`.
 
 ### Other HUDs
 `Config.ExternalHud` lists the HUDs hidden during the scenes (fks-hud and the VORP UI by default).

@@ -156,7 +156,10 @@ Config.StarterClothing = {
 --  KITS INICIAIS (escolhidos logo após criar a personagem)
 -- =====================================================================
 -- Enabled = false => o ecrã de kits não aparece e não se recebe nada.
--- item = nome do item na tabela `items` do vorp_inventory.
+-- item   = nome do item na tabela `items` do vorp_inventory.
+-- weapon = nome da arma (vorp_inventory config/weapons.lua), ex.: "WEAPON_REVOLVER_CATTLEMAN".
+--          Opcional: ammo = { AMMO_REVOLVER = 24 } dá munição carregada com a arma.
+--          Ex.: { weapon = "WEAPON_LASSO_REINFORCED", label = "Lasso", amount = 1 },
 -- label / description = chave em locales/*.lua (traduz conforme Config.Locale) ou texto direto.
 Config.StarterKits = {
     Enabled = true,

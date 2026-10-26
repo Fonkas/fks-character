@@ -34,6 +34,7 @@ RegisterCommand(Config.SkinMenuCommand or "skinmenu", function(src, args)
 
     Edits[target] = { charId = char.charIdentifier, model = model, comps = comps, by = src }
     SetPlayerRoutingBucket(target, Config.Session.RoutingBucketOffset + target)
+    Characters.HoldPosition(target, true) -- não gravar a posição do interior se sair a meio
     TriggerClientEvent("fks-character:client:skinMenu", target, {
         skin = summary.skin, comps = summary.comps, height = height, model = model,
     })
@@ -69,6 +70,7 @@ RPC.Register("skinmenu:save", function(src, data)
 
     Edits[src] = nil
     SetPlayerRoutingBucket(src, 0)
+    Characters.HoldPosition(src, false)
     Characters.Log("Skin menu", ("%s guardou nova aparência (personagem #%s)"):format(GetPlayerName(src), edit.charId))
     return { ok = true, skin = skin, comps = merged }
 end)
@@ -77,6 +79,7 @@ RPC.Register("skinmenu:cancel", function(src)
     if not Edits[src] then return { ok = false } end
     Edits[src] = nil
     SetPlayerRoutingBucket(src, 0)
+    Characters.HoldPosition(src, false)
     return { ok = true }
 end)
 

@@ -58,6 +58,22 @@ local function ageFromBirthdate(birthdate, today)
     return Validate.Age(tonumber(d), tonumber(m), tonumber(y), today)
 end
 
+-- Posição guardada utilizável: números válidos e não (0,0,0) (o que o VORP grava se o ped não existir)
+function Characters.ValidCoords(c)
+    if type(c) ~= "table" then return false end
+    local x, y, z = tonumber(c.x), tonumber(c.y), tonumber(c.z)
+    if not (x and y and z) then return false end
+    if math.abs(x) < 1.0 and math.abs(y) < 1.0 then return false end
+    return true
+end
+
+-- Enquanto true, o vorp_core não grava a posição (mesma flag que ele usa nas lojas de roupa).
+-- Usado nas nossas cenas: foto, comboio, /skinmenu (o interior fica no ar por cima de Lemoyne).
+function Characters.HoldPosition(src, hold)
+    if GetPlayerName(src) == nil then return end
+    Player(src).state:set("PlayerIsInCharacterShops", hold and true or nil, true)
+end
+
 function Characters.GetUser(src)
     local user = Core.getUser(src)
     if not user then return nil end

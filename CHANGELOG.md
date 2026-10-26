@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+- **Starter kits can give weapons**: use `weapon = "WEAPON_..."` instead of `item` (optional `ammo = { AMMO_REVOLVER = 24 }`). Weapons are created with vorp_inventory `createWeapon`, so they no longer fail with "does not exist in DB".
+- On start, the server console warns about kit items that don't exist in your `items` table.
+- **Fixed: characters sometimes spawning at the default spawn instead of where they logged out.** The last position is now read from the database when the character is selected (not from the copy loaded when the player joined), and invalid positions (0, 0, 0) are ignored.
+- VORP no longer saves the position while the player is in the portrait / train / `/skinmenu` scenes.
+
 ## 1.1.0
 - **The interface is now drawn by fks-core** (shared FKS UI). fks-character no longer ships its own HTML, CSS,
   JS or fonts, so the server runs one NUI for every FKS script and the look follows `Config.Theme` in fks-core.

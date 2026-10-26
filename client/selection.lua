@@ -330,6 +330,10 @@ function LoadCharacterIntoWorld(res, isNew)
     Scene.SetExternalHud(true)
     TriggerEvent("vorp:initCharacter", vector3(c.x, c.y, c.z), heading + 0.0, res.isDead == true)
     TriggerEvent("fks-character:client:characterLoaded", res.charId, isNew == true)
+    if isNew then
+        -- já no mundo: o VORP pode voltar a gravar a posição
+        SetTimeout(4000, function() ServerCall("spawned") end)
+    end
 end
 
 function Selection.Play(charId)

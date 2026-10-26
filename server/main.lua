@@ -164,6 +164,9 @@ RPC.Register("create", function(src, data)
     DB.InsertIdentity(charId, identifier, identity)
     session.stage = "done"
     session.arrival = Config.Arrival.Enabled and spawnIndex ~= nil
+    -- foto + comboio: o VORP não grava a posição até a personagem entrar no mundo
+    Characters.HoldPosition(src, true)
+    SetTimeout(5 * 60000, function() Characters.HoldPosition(src, false) end)
     if kit then Kits.Give(src, charId, kit) end
 
     Characters.Log("Personagem criada", ("**%s** (%s)\nPersonagem: %s %s (#%s)"):format(GetPlayerName(src), identifier, identity.firstname, identity.lastname, charId))
@@ -209,6 +212,14 @@ RPC.Register("arrival:end", function(src)
     return { ok = true }
 end, { cooldown = false })
 
+-- A personagem nova entrou no mundo: o VORP volta a gravar a posição
+RPC.Register("spawned", function(src)
+    local session = Sessions[src]
+    if not session or session.stage ~= "done" then return { ok = false } end
+    Characters.HoldPosition(src, false)
+    return { ok = true }
+end, { cooldown = false })
+
 RPC.Register("select", function(src, data)
     local session = getMenuSession(src)
     if not session then return { ok = false, error = "err_already_selected" } end
@@ -224,13 +235,26 @@ RPC.Register("select", function(src, data)
     session.stage = "done"
     user.setUsedCharacter(charId)
 
-    local coords, heading = summary.coords, summary.coords and summary.coords.heading
-    local valid = Config.Spawn.UseLastPosition and type(coords) == "table"
-        and tonumber(coords.x) and tonumber(coords.y) and tonumber(coords.z)
-    if valid then
-        coords = { x = tonumber(coords.x), y = tonumber(coords.y), z = tonumber(coords.z) }
-        heading = tonumber(heading) or 0.0
-    else
+    -- Última posição: lida da base de dados AGORA (a cópia em memória foi carregada quando o jogador
+    -- entrou e pode ser anterior à gravação da última saída, se ele voltou a entrar depressa).
+    local coords, heading
+    if Config.Spawn.UseLastPosition then
+        local fromDb = MySQL.scalar.await("SELECT coords FROM characters WHERE charidentifier = ?", { charId })
+        for _, candidate in ipairs({ fromDb, summary.coords }) do
+            local c = candidate
+            if type(c) == "string" then
+                local ok, decoded = pcall(json.decode, c)
+                c = ok and decoded or nil
+            end
+            if Characters.ValidCoords(c) then
+                coords = { x = tonumber(c.x), y = tonumber(c.y), z = tonumber(c.z) }
+                heading = tonumber(c.heading) or 0.0
+                break
+            end
+        end
+    end
+    if not coords then
+        debug("sem posição válida guardada, a usar Config.Spawn.Fallback", charId)
         coords, heading = fallbackCoords()
     end
 
