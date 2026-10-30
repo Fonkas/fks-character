@@ -220,6 +220,19 @@ RPC.Register("spawned", function(src)
     return { ok = true }
 end, { cooldown = false })
 
+-- Spawn tardio do spawnmanager (ver client/spawnguard.lua): o vorp_core mudou o jogador de
+-- routing bucket. Se ele já está a jogar e não está numa das nossas cenas, volta à sessão normal.
+RPC.Register("respawnfix", function(src)
+    if not Player(src).state.IsInSession then return { ok = false } end
+    local session = Sessions[src]
+    if session and (session.arrival or session.stage ~= "done") then return { ok = false } end
+    if GetPlayerRoutingBucket(src) ~= 0 then
+        SetPlayerRoutingBucket(src, 0)
+        print(("^3[fks-character] %s: routing bucket reposto a 0 depois de um spawn tardio^7"):format(GetPlayerName(src)))
+    end
+    return { ok = true }
+end, { cooldown = 3000 })
+
 RPC.Register("select", function(src, data)
     local session = getMenuSession(src)
     if not session then return { ok = false, error = "err_already_selected" } end

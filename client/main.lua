@@ -73,7 +73,7 @@ RegisterNetEvent("vorpcharacter:savenew", function(comps, skin)
     saveCache()
 end)
 
-local function reloadLook()
+function ReloadLook()
     if not CurrentSkin or not CurrentComps then return end
     local ped = PlayerPedId()
     local model = GetEntityModel(ped)
@@ -88,19 +88,19 @@ local function reloadLook()
 end
 
 AddEventHandler("vorpcharacter:reloadafterdeath", function()
-    reloadLook()
+    ReloadLook()
     local ped = PlayerPedId()
     SetAttributeCoreValue(ped, 0, 100)
     SetEntityHealth(ped, 600, 1)
     SetAttributeCoreValue(ped, 1, 100)
 end)
 
-AddEventHandler("fks-character:client:reloadLook", reloadLook)
+AddEventHandler("fks-character:client:reloadLook", ReloadLook)
 
 if Config.ReloadCommand then
     RegisterCommand(Config.ReloadCommand, function()
         if not LocalPlayer.state.IsInSession or IsEntityDead(PlayerPedId()) then return end
-        reloadLook()
+        ReloadLook()
     end, false)
 end
 

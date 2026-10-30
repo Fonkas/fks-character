@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.2
+- **Fixed: character loading invisible and then being teleported to the default spawn.** On slow clients the map can finish loading after the character is already in the world; basic-gamemode then forces a spawnmanager respawn (invisible player, teleport to the map spawn) and vorp_core moves the player to another routing bucket. fks-character now keeps the auto-spawn off once the character is loaded, and if a late spawn still happens it puts the character back where it was (position, appearance, visibility, screen, radar and routing bucket).
+
 ## 1.1.1
 - **Starter kits can give weapons**: use `weapon = "WEAPON_..."` instead of `item` (optional `ammo = { AMMO_REVOLVER = 24 }`). Weapons are created with vorp_inventory `createWeapon`, so they no longer fail with "does not exist in DB".
 - On start, the server console warns about kit items that don't exist in your `items` table.

@@ -6,7 +6,7 @@ lua54 'yes'
 name 'fks-character'
 author 'Fonkas'
 description 'Multicharacter, character creator and starter experience for RedM (VORP)'
-version '1.1.1'
+version '1.1.2'
 license 'GPL-2.0' -- see LICENSE
 -- fks-character  Copyright (C) 2026 Fonkas
 
@@ -41,6 +41,7 @@ client_scripts {
     'client/arrival.lua',
     'client/cinematics.lua',
     'client/main.lua',
+    'client/spawnguard.lua',
 }
 
 server_scripts {
