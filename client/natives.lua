@@ -3,9 +3,18 @@
 
 N = {}
 
+function N.IsReady(ped)
+    return Citizen.InvokeNative(0xA0BC8FAED8CFEB3C, ped, Citizen.ResultAsInteger()) ~= 0 -- IsPedReadyToRender
+end
+
+-- Devolve true se o ped ficou pronto a desenhar antes do timeout
 function N.WaitReady(ped, timeout)
     local deadline = GetGameTimer() + (timeout or 3000)
-    repeat Wait(0) until Citizen.InvokeNative(0xA0BC8FAED8CFEB3C, ped) or GetGameTimer() > deadline -- IsPedReadyToRender
+    while not N.IsReady(ped) do
+        if GetGameTimer() > deadline or not DoesEntityExist(ped) then return false end
+        Wait(0)
+    end
+    return true
 end
 
 function N.UpdateVariation(ped)
@@ -110,9 +119,15 @@ function N.LoadModel(model)
     local hash = type(model) == "string" and joaat(model) or model
     if not IsModelValid(hash) then return nil end
     if not HasModelLoaded(hash) then
-        RequestModel(hash, false)
-        local deadline = GetGameTimer() + 10000
-        repeat Wait(0) until HasModelLoaded(hash) or GetGameTimer() > deadline
+        -- num PC/ligação lentos o pedido pode perder-se: repetir de vez em quando
+        local deadline, nextRequest = GetGameTimer() + 15000, 0
+        while not HasModelLoaded(hash) and GetGameTimer() < deadline do
+            if GetGameTimer() >= nextRequest then
+                RequestModel(hash, false)
+                nextRequest = GetGameTimer() + 1000
+            end
+            Wait(0)
+        end
     end
     return HasModelLoaded(hash) and hash or nil
 end

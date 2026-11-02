@@ -79,12 +79,17 @@ local function applyComponent(ped, key, value)
     if type(value) == "table" then applyTint(ped, key, value) end
 end
 
+Look.Component = applyComponent
+
+-- camadas que costumam ficar por baixo quando se aplica outra peça por cima
+Look.Layered = { "Shirt", "Vest", "Boots" }
+
 function Look.Comps(ped, comps)
     for key, value in pairs(comps) do
         applyComponent(ped, key, value)
     end
     -- reaplicar camadas que costumam ficar por baixo
-    for _, key in ipairs({ "Shirt", "Vest", "Boots" }) do
+    for _, key in ipairs(Look.Layered) do
         if comps[key] then applyComponent(ped, key, comps[key]) end
     end
     N.RemoveTag(ped, Appearance.Categories.AmmoPistol)

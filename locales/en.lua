@@ -263,4 +263,10 @@ Locales.en = {
     adm_usage_slots = "Usage: /fks_addslots [player id | steam:...] [amount]",
     adm_usage_restore = "Usage: /fks_restorechar [charidentifier]",
     adm_deleted_list = "Deleted characters of %s: %s",
+
+    -- Clothing commands (/hat, /jacket...)
+    clothes_suggest = "Take off / put back on this piece of clothing",
+    clothes_suggest_restore = "Put back on everything you took off",
+    clothes_none = "You're not wearing that.",
+    clothes_nothing_hidden = "You haven't taken anything off.",
 }

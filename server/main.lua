@@ -44,29 +44,80 @@ local function buildPayload(src)
 end
 BuildSelectionPayload = buildPayload
 
-local function openSelection(src)
+-- Spawn tardio do spawnmanager com a personagem já no mundo: o vorp_core (vorp:playerSpawn) acabou
+-- de mudar o jogador para outro routing bucket — fica invisível para os outros. Repor já aqui.
+local function lateSpawn(src)
+    local session = Sessions[src]
+    local bucket = 0
+    if (session and session.arrival) or (SkinMenu and SkinMenu.IsEditing(src)) then
+        bucket = Config.Session.RoutingBucketOffset + src  -- está numa das nossas cenas isoladas
+    end
+    if GetPlayerRoutingBucket(src) ~= bucket then SetPlayerRoutingBucket(src, bucket) end
+    print(("^3[fks-character] %s (%s): spawn tardio com a personagem já no mundo - routing bucket reposto a %s^7")
+        :format(GetPlayerName(src), src, bucket))
+end
+
+local opening = {}   -- src -> token do pedido de seleção em curso
+local openToken = 0
+
+-- force = true: abrir mesmo com uma personagem ativa (exports / /fkschars)
+local function openSelection(src, force)
     src = tonumber(src)
     if not src or GetPlayerName(src) == nil then return end
-    if Player(src).state.IsInSession then return debug("jogador já em sessão", src) end
+    force = force == true
 
-    if not waitFor(function() return DB.Ready and Core.getUser(src) ~= nil end, 15000) then
+    if Player(src).state.IsInSession and not force then return lateSpawn(src) end
+
+    -- Num cliente lento o vorp:playerSpawn pode chegar 2 vezes (spawn inicial + spawn do basic-gamemode).
+    -- Um 2.º pedido não pode reabrir a seleção por cima de uma que já está aberta ou a carregar.
+    local previous = Sessions[src]
+    if not force then
+        if opening[src] then return debug("seleção já a abrir - pedido duplicado ignorado", src) end
+        if previous and (previous.stage == "menu" or previous.stage == "creating") then
+            return debug("seleção já aberta - pedido duplicado ignorado", src, previous.stage)
+        end
+    end
+
+    openToken = openToken + 1
+    local token = openToken
+    opening[src] = token
+
+    -- ainda é este o pedido válido? (o jogador pode ter escolhido personagem ou saído enquanto esperávamos)
+    local function stillValid()
+        if opening[src] ~= token or GetPlayerName(src) == nil then return false end
+        if not force and Player(src).state.IsInSession then return false end
+        return Sessions[src] == previous
+    end
+
+    local ready = waitFor(function() return DB.Ready and Core.getUser(src) ~= nil end, 15000)
+    if not ready then
+        if opening[src] == token then opening[src] = nil end
         return print(("^1[fks-character] utilizador %s não carregou a tempo^7"):format(src))
     end
 
     -- As personagens do VORP são carregadas de forma assíncrona no playerJoining
     Wait(250)
-    local payload = buildPayload(src)
-    if not payload then return end
+    local payload = stillValid() and buildPayload(src) or nil
+    if not payload or not stillValid() then
+        if opening[src] == token then opening[src] = nil end
+        if Player(src).state.IsInSession and not force then lateSpawn(src) end
+        return debug("abertura da seleção cancelada", src)
+    end
+    opening[src] = nil
 
+    -- personagem ativa antes (relog / /fkschars): o cliente tem de aceitar reabrir a seleção
+    payload.reopen = force or (previous ~= nil and previous.stage == "done")
     Sessions[src] = { stage = "menu" }
     SetPlayerRoutingBucket(src, Config.Session.RoutingBucketOffset + src)
+    debug("seleção aberta", src, payload.reopen and "(reabrir)" or "")
     TriggerClientEvent("fks-character:client:open", src, payload)
 end
 
 -- Eventos internos do vorp_core (TriggerEvent no servidor, não são net events)
-AddEventHandler("vorp_CreateNewCharacter", openSelection)
-AddEventHandler("vorp_character:server:GoToSelectionMenu", openSelection)
-AddEventHandler("vorp_character:server:SpawnUniqueCharacter", openSelection)
+local function fromCore(src) openSelection(src, false) end
+AddEventHandler("vorp_CreateNewCharacter", fromCore)
+AddEventHandler("vorp_character:server:GoToSelectionMenu", fromCore)
+AddEventHandler("vorp_character:server:SpawnUniqueCharacter", fromCore)
 
 -- Disparado pelo core quando uma personagem fica ativa
 AddEventHandler("vorp:SelectedCharacter", function(src, character)
@@ -78,6 +129,7 @@ end)
 
 AddEventHandler("playerDropped", function()
     Sessions[source] = nil
+    opening[source] = nil
 end)
 
 local function getMenuSession(src)
@@ -220,18 +272,19 @@ RPC.Register("spawned", function(src)
     return { ok = true }
 end, { cooldown = false })
 
--- Spawn tardio do spawnmanager (ver client/spawnguard.lua): o vorp_core mudou o jogador de
--- routing bucket. Se ele já está a jogar e não está numa das nossas cenas, volta à sessão normal.
+-- Spawn tardio do spawnmanager (ver client/spawnguard.lua): o cliente confirma que voltou ao mundo
+-- partilhado depois de repor a personagem. Devolve ok = true quando o routing bucket está certo.
 RPC.Register("respawnfix", function(src)
     if not Player(src).state.IsInSession then return { ok = false } end
     local session = Sessions[src]
-    if session and (session.arrival or session.stage ~= "done") then return { ok = false } end
+    if session and session.stage ~= "done" then return { ok = false } end
+    if (session and session.arrival) or (SkinMenu and SkinMenu.IsEditing(src)) then return { ok = true } end
     if GetPlayerRoutingBucket(src) ~= 0 then
         SetPlayerRoutingBucket(src, 0)
         print(("^3[fks-character] %s: routing bucket reposto a 0 depois de um spawn tardio^7"):format(GetPlayerName(src)))
     end
-    return { ok = true }
-end, { cooldown = 3000 })
+    return { ok = true, bucket = GetPlayerRoutingBucket(src) }
+end, { cooldown = 1000 })
 
 RPC.Register("select", function(src, data)
     local session = getMenuSession(src)
@@ -382,12 +435,13 @@ exports("GetCharacterSlots", function(src)
     return Characters.GetSlots(src, user, identifier)
 end)
 
-exports("OpenSelection", openSelection)
+-- Chamado por outros recursos (ex.: relog): abre sempre, mesmo com uma personagem ativa
+exports("OpenSelection", function(src) openSelection(src, true) end)
 
 if Config.DevMode then
     RegisterCommand("fkschars", function(src)
         if src == 0 then return end
         Player(src).state:set("IsInSession", false, true)
-        openSelection(src)
+        openSelection(src, true)
     end, false)
 end

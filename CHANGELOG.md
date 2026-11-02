@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.3
+- **Fixed: character spawning invisible and then being sent back to the moonshine bar** (slow PCs / connections).
+  On those clients `vorp:playerSpawn` can reach the server twice; the second selection request could finish
+  *after* the character was picked, moving the player back to the selection bucket (invisible to everyone) and
+  teleporting them to the bar. Selection requests are now de-duplicated and re-checked after every wait, and the
+  client ignores a late selection request once the character is in the world.
+- The spawnmanager auto-spawn now goes through fks-character (`setAutoSpawnCallback`): the late `forceRespawn`
+  from basic-gamemode is dropped while a character is loaded instead of racing to switch auto-spawn off.
+- Late-spawn recovery no longer needs a saved position: it starts from the coordinates the character spawned at.
+  It waits for vorp_core, checks the position stuck (up to 3 tries) and confirms the routing bucket with the server.
+  The server also resets the routing bucket by itself when vorp_core moves an in-game player.
+- Appearance loading checks the ped is really ready (model + components) and retries before handing over to
+  vorp_core; for 20 s after spawning a missing appearance / invisible ped is fixed automatically.
+- `/rc` (and the late-spawn fix) also reload the model when it does not match the character's gender.
+- `Config.Debug = true` prints a timeline of map start, auto-spawn, playerSpawned, appearance and routing bucket.
+- **New: clothing commands** `/hat`, `/jacket`, `/shirt`, `/vest`, `/pants`, `/shoes`, `/gloves`, `/mask`, ... take a
+  piece off and put it back on; `/clothes` puts everything back. Configure in `Config.ClothingCommands`.
+
 ## 1.1.2
 - **Fixed: character loading invisible and then being teleported to the default spawn.** On slow clients the map can finish loading after the character is already in the world; basic-gamemode then forces a spawnmanager respawn (invisible player, teleport to the map spawn) and vorp_core moves the player to another routing bucket. fks-character now keeps the auto-spawn off once the character is loaded, and if a late spawn still happens it puts the character back where it was (position, appearance, visibility, screen, radar and routing bucket).
 

@@ -285,4 +285,10 @@ Locales.pt = {
     adm_usage_slots = "Uso: /fks_addslots [id do jogador | steam:...] [quantidade]",
     adm_usage_restore = "Uso: /fks_restorechar [charidentifier]",
     adm_deleted_list = "Personagens eliminadas de %s: %s",
+
+    -- Comandos de roupa (/hat, /jacket...)
+    clothes_suggest = "Tirar / voltar a vestir esta peça de roupa",
+    clothes_suggest_restore = "Voltar a vestir tudo o que tiraste",
+    clothes_none = "Não tens isso vestido.",
+    clothes_nothing_hidden = "Não tiraste nenhuma peça.",
 }

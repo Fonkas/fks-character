@@ -142,6 +142,11 @@ names from vorp_inventory `config/weapons.lua`.
 | `/fks_deletedchars [id\|steam:...]` | admins | list soft-deleted characters |
 | `/fks_restorechar [charidentifier]` | admins | restore a soft-deleted character |
 | `/rc` | everyone | reload your saved appearance |
+| `/hat` `/mask` `/glasses` `/neckwear` `/jacket` `/poncho` `/vest` `/shirt` `/suspenders` `/gloves` `/belt` `/gunbelt` `/satchel` `/pants` `/chaps` `/dress` `/shoes` `/accessories` | everyone | take that piece of clothing off; type it again to put it back on |
+| `/clothes` | everyone | put back on everything you took off |
+
+The clothing commands only change what you see: the saved outfit is not touched. Names and pieces are set in
+`Config.ClothingCommands`.
 
 Admins: ACE `fks.characters.admin` or a VORP group in `Config.AdminGroups`.
 
@@ -170,6 +175,9 @@ exports["fks-character"]:GetPlayerComponent(category)
 exports["fks-character"]:GetAllPlayerComponents()
 exports["fks-character"]:GetPlayerSkin()
 exports["fks-character"]:ApplyAppearance(ped, skin, comps)
+exports["fks-character"]:ToggleClothing({ "Hat" })   -- "off" | "on" | nil (not wearing it)
+exports["fks-character"]:IsClothingHidden("Hat")
+exports["fks-character"]:RestoreClothing()
 ```
 Compatible vorp_character events: `vorpcharacter:savenew`, `vorpcharacter:updateCache`,
 `vorpcharacter:reloadafterdeath`.

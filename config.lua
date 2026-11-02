@@ -27,6 +27,37 @@ Config.ExternalHud = {
     events = { "vorp:showUi" },
 }
 
+-- Comandos para tirar / voltar a vestir peças de roupa (escrever outra vez volta a vestir).
+-- Só muda o que se vê: a roupa guardada não é alterada. Comando = chaves vorp que liga/desliga.
+Config.ClothingCommands = {
+    Enabled = true,
+    Cooldown = 1000,            -- ms entre comandos
+    RestoreCommand = "clothes", -- volta a vestir tudo o que foi tirado (nil = desativado)
+    Commands = {
+        hat        = { "Hat" },
+        mask       = { "Mask" },
+        glasses    = { "EyeWear" },
+        neckwear   = { "NeckWear", "NeckTies" },
+        jacket     = { "Coat", "CoatClosed" },
+        poncho     = { "Poncho", "Cloak" },
+        vest       = { "Vest" },
+        shirt      = { "Shirt" },
+        suspenders = { "Suspender" },
+        gloves     = { "Glove", "Gauntlets" },
+        belt       = { "Belt", "Buckle" },
+        gunbelt    = { "Gunbelt", "GunbeltAccs", "Holster" },
+        satchel    = { "Satchels" },
+        pants      = { "Pant", "Skirt" },
+        chaps      = { "Chap" },
+        dress      = { "Dress" },
+        shoes      = { "Boots", "Spurs", "Spats" },
+        accessories = { "Accessories", "Bracelet", "RingLh", "RingRh" },
+    },
+    -- Animação opcional por comando, ex.:
+    -- hat = { dict = "nome_do_dicionario", name = "nome_da_animacao", time = 1200, wait = 500 },
+    Animations = {},
+}
+
 -- Comando de admin que reabre o criador de aparência a um jogador: /skinmenu [id]
 Config.SkinMenuCommand = "skinmenu"
 

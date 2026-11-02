@@ -3,6 +3,9 @@
 
 local Edits = {}  -- src -> { charId, model, comps (estrutura antiga), by }
 
+SkinMenu = {}
+function SkinMenu.IsEditing(src) return Edits[src] ~= nil end
+
 local function decode(value)
     if type(value) == "table" then return value end
     local ok, res = pcall(json.decode, value or "")

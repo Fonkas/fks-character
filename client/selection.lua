@@ -229,7 +229,16 @@ local function pushToUI(update)
     if update then UI.Update(selectionView()) else UI.Open(selectionView(), { closable = false }) end
 end
 
+local openSelection
+
 function Selection.Open(payload)
+    Selection.opening = true
+    local ok, err = pcall(openSelection, payload)
+    Selection.opening = false
+    if not ok then print(("^1[fks-character] erro ao abrir a seleção: %s^7"):format(tostring(err))) end
+end
+
+openSelection = function(payload)
     Selection.payload = payload
     Selection.busy = false
     Today = payload.today
@@ -282,21 +291,38 @@ function LoadCharacterIntoWorld(res, isNew)
         end
     end)
 
+    SpawnGuard.loading = true
+    SpawnGuard.Log("a carregar a personagem", res.charId, isNew and "(nova)" or "")
+
+    CurrentSkin = res.skin
+    CurrentComps = {}
+    for k, v in pairs(res.comps) do
+        CurrentComps[k] = type(v) == "table" and v or { comp = v, tint0 = 0, tint1 = 0, tint2 = 0, palette = 0 }
+    end
+    Clothes.Reset()
+
     local model = N.LoadModel(res.skin.sex)
     if model and not finished then
         SetPlayerModel(PlayerId(), model, false)
         SetModelAsNoLongerNeeded(model)
         ped = PlayerPedId()
-        N.WaitReady(ped)
-        CurrentSkin = res.skin
-        CurrentComps = {}
-        for k, v in pairs(res.comps) do
-            CurrentComps[k] = type(v) == "table" and v or { comp = v, tint0 = 0, tint1 = 0, tint2 = 0, palette = 0 }
+        N.WaitReady(ped, 5000)
+        -- num PC lento a aparência pode não pegar à primeira: confirmar e repetir antes de entrar no mundo
+        for attempt = 1, 3 do
+            Look.Apply(ped, CurrentSkin, CurrentComps)
+            local ready = N.WaitReady(ped, 5000)
+            local ok = ready and GetEntityModel(ped) == model and N.NumComponents(ped) > 0
+            SpawnGuard.Log("aparência", attempt, "pronta", ready, "componentes", N.NumComponents(ped))
+            if ok or finished then break end
+            print(("^3[fks-character] aparência não ficou pronta (tentativa %d) - a repetir^7"):format(attempt))
+            Wait(500)
+            ped = PlayerPedId()
         end
-        Look.Apply(ped, CurrentSkin, CurrentComps)
         SetAttributeCoreValue(ped, 0, 100)
         SetAttributeCoreValue(ped, 1, 100)
         success = not finished
+    else
+        print(("^1[fks-character] não foi possível carregar o modelo %s^7"):format(tostring(res.skin.sex)))
     end
     finished = true
 
@@ -328,6 +354,7 @@ function LoadCharacterIntoWorld(res, isNew)
     end
 
     Scene.SetExternalHud(true)
+    SpawnGuard.SetPosition(c.x, c.y, c.z, heading)
     TriggerEvent("vorp:initCharacter", vector3(c.x, c.y, c.z), heading + 0.0, res.isDead == true)
     TriggerEvent("fks-character:client:characterLoaded", res.charId, isNew == true)
     if isNew then

@@ -7,6 +7,19 @@ Today = nil
 
 RegisterNetEvent("fks-character:client:open", function(payload)
     if type(payload) ~= "table" then return end
+    -- Proteção: um pedido de seleção atrasado não pode tirar do mundo uma personagem que já entrou
+    -- (era isto que levava o jogador de volta à destilaria). Só o relog / /fkschars reabrem (reopen).
+    if (SpawnGuard.inWorld or SpawnGuard.loading) and not payload.reopen then
+        return print("^3[fks-character] pedido de seleção atrasado ignorado: a personagem já está no mundo^7")
+    end
+    if Selection.opening or (Scene.active and not payload.reopen) then
+        return SpawnGuard.Log("pedido de seleção duplicado ignorado", Scene.active)
+    end
+    if payload.reopen then
+        SpawnGuard.Reset()
+        Clothes.Reset()
+    end
+    SpawnGuard.Log("a abrir a seleção", #(payload.characters or {}), "personagens")
     ShutdownLoadingScreen()
     ShutdownLoadingScreenNui()
     pcall(function() exports.spawnmanager:setAutoSpawn(false) end)
@@ -16,6 +29,11 @@ end)
 -- =====================================================================
 --  COMPATIBILIDADE vorp_character (barbearias, lojas, outros recursos)
 -- =====================================================================
+
+-- uma loja trocou estas peças: deixam de contar como tiradas (/hat, /jacket...)
+local function forgetHidden(comps)
+    for key in pairs(comps) do Clothes.Forget(key) end
+end
 
 local function normalizeComps(comps)
     local out = {}
@@ -55,6 +73,7 @@ RegisterNetEvent("vorpcharacter:updateCache", function(skin, comps)
     if comps then
         CurrentComps = CurrentComps or {}
         for k, v in pairs(normalizeComps(comps)) do CurrentComps[k] = v end
+        forgetHidden(comps)
     end
     saveCache()
 end)
@@ -64,6 +83,7 @@ RegisterNetEvent("vorpcharacter:savenew", function(comps, skin)
     if comps then
         CurrentComps = CurrentComps or {}
         for k, v in pairs(normalizeComps(comps)) do CurrentComps[k] = v end
+        forgetHidden(comps)
     end
     if skin and CurrentSkin then
         for k, v in pairs(skin) do
@@ -76,15 +96,18 @@ end)
 function ReloadLook()
     if not CurrentSkin or not CurrentComps then return end
     local ped = PlayerPedId()
-    local model = GetEntityModel(ped)
-    if model ~= joaat("mp_male") and model ~= joaat("mp_female") then
+    -- modelo diferente do da personagem (ex.: spawnmanager com outro modelo, ou homem/mulher trocados)
+    if GetEntityModel(ped) ~= joaat(CurrentSkin.sex) then
         local hash = N.LoadModel(CurrentSkin.sex)
         if not hash then return end
         SetPlayerModel(PlayerId(), hash, false)
         SetModelAsNoLongerNeeded(hash)
         ped = PlayerPedId()
+        N.WaitReady(ped, 5000)
     end
     Look.Apply(ped, CurrentSkin, CurrentComps)
+    -- peças tiradas com /hat, /jacket... continuam tiradas
+    Clothes.Reapply(ped)
 end
 
 AddEventHandler("vorpcharacter:reloadafterdeath", function()
