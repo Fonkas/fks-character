@@ -105,8 +105,8 @@ function ReloadLook()
         ped = PlayerPedId()
         N.WaitReady(ped, 5000)
     end
-    Look.Apply(ped, CurrentSkin, CurrentComps)
-    -- peças tiradas com /hat, /jacket... continuam tiradas
+    -- peças tiradas com /hat, /jacket... continuam tiradas; mangas, gola... continuam como estavam
+    Look.Apply(ped, CurrentSkin, Clothes.Visible(CurrentComps))
     Clothes.Reapply(ped)
 end
 

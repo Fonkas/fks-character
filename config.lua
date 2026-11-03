@@ -53,6 +53,15 @@ Config.ClothingCommands = {
         shoes      = { "Boots", "Spurs", "Spats" },
         accessories = { "Accessories", "Bracelet", "RingLh", "RingRh" },
     },
+    -- Estilos: mudam a forma como a peça está vestida (só se a peça tiver esse estilo).
+    -- comando = estilo: "sleeves" (mangas), "collar" (gola), "boots" (botas por baixo/cima das calças), "bandana" (lenço na cara)
+    Styles = {
+        sleeves   = "sleeves",
+        collar    = "collar",
+        bootstyle = "boots",
+        tuck      = "boots",
+        bandana   = "bandana",
+    },
     -- Animação opcional por comando, ex.:
     -- hat = { dict = "nome_do_dicionario", name = "nome_da_animacao", time = 1200, wait = 500 },
     Animations = {},
@@ -299,6 +308,7 @@ Config.Session = {
     RoutingBucketOffset = 5000,  -- bucket = offset + serverId enquanto está no menu
     LoadTimeout = 20000,         -- ms até desistir de carregar personagem
     RequestTimeout = 15000,      -- ms para pedidos ao servidor
+    VisibilityGuard = 60000,     -- ms depois de entrar em que a personagem é mostrada se algo a esconder
 }
 
 -- ---------------------------------------------------------------------

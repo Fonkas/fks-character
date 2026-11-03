@@ -291,4 +291,9 @@ Locales.pt = {
     clothes_suggest_restore = "Voltar a vestir tudo o que tiraste",
     clothes_none = "Não tens isso vestido.",
     clothes_nothing_hidden = "Não tiraste nenhuma peça.",
+    clothes_no_style = "Essa peça não se pode vestir dessa forma.",
+    clothes_suggest_style_sleeves = "Arregaçar / desenrolar as mangas",
+    clothes_suggest_style_collar = "Abrir / fechar a gola da camisa",
+    clothes_suggest_style_boots = "Botas por cima / por baixo das calças",
+    clothes_suggest_style_bandana = "Puxar o lenço para a cara / para baixo",
 }

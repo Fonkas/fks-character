@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.4
+- **Invisible character after spawning:** on some servers something hides the player again right after the
+  character enters the world. The old check showed the character only 3 times and then gave up. For 60 s after
+  spawning (`Config.Session.VisibilityGuard`) the character is now shown again every time it goes invisible.
+  This also undoes the spawnmanager freeze (frozen, no collision, no control) and network concealment.
+  The routing bucket is confirmed with the server, and the console prints what was seen so the resource doing it can be found.
+- **Fixed: clothes looking wrong after taking a piece off and putting it back on** (shirt over the vest, puffy
+  sleeves...) until `/rc`. The clothing commands now rebuild the whole outfit the same way `/rc` does.
+- **New: clothing style commands**: `/sleeves`, `/collar`, `/bootstyle` (alias `/tuck`) and `/bandana`.
+  If the piece doesn't have that style, the player is told. Styles are kept after `/rc`, death and the clothing commands.
+  Configure them in `Config.ClothingCommands.Styles`.
+- New export `ToggleClothingStyle(style)`.
+
 ## 1.1.3
 - **Fixed: character spawning invisible and then being sent back to the moonshine bar** (slow PCs / connections).
   On those clients `vorp:playerSpawn` can reach the server twice; the second selection request could finish

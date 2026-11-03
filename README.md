@@ -144,6 +144,9 @@ names from vorp_inventory `config/weapons.lua`.
 | `/rc` | everyone | reload your saved appearance |
 | `/hat` `/mask` `/glasses` `/neckwear` `/jacket` `/poncho` `/vest` `/shirt` `/suspenders` `/gloves` `/belt` `/gunbelt` `/satchel` `/pants` `/chaps` `/dress` `/shoes` `/accessories` | everyone | take that piece of clothing off; type it again to put it back on |
 | `/clothes` | everyone | put back on everything you took off |
+| `/sleeves` `/collar` | everyone | roll up / down the shirt sleeves, open / close the collar |
+| `/bootstyle` `/tuck` | everyone | wear the boots over / under the pants |
+| `/bandana` | everyone | pull the neckerchief up over the face / back down |
 
 The clothing commands only change what you see: the saved outfit is not touched. Names and pieces are set in
 `Config.ClothingCommands`.
@@ -178,6 +181,7 @@ exports["fks-character"]:ApplyAppearance(ped, skin, comps)
 exports["fks-character"]:ToggleClothing({ "Hat" })   -- "off" | "on" | nil (not wearing it)
 exports["fks-character"]:IsClothingHidden("Hat")
 exports["fks-character"]:RestoreClothing()
+exports["fks-character"]:ToggleClothingStyle("sleeves") -- "sleeves" | "collar" | "boots" | "bandana"
 ```
 Compatible vorp_character events: `vorpcharacter:savenew`, `vorpcharacter:updateCache`,
 `vorpcharacter:reloadafterdeath`.

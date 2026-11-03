@@ -269,4 +269,9 @@ Locales.en = {
     clothes_suggest_restore = "Put back on everything you took off",
     clothes_none = "You're not wearing that.",
     clothes_nothing_hidden = "You haven't taken anything off.",
+    clothes_no_style = "That piece of clothing can't be worn that way.",
+    clothes_suggest_style_sleeves = "Roll up / roll down your sleeves",
+    clothes_suggest_style_collar = "Open / close your shirt collar",
+    clothes_suggest_style_boots = "Wear your boots over / under your pants",
+    clothes_suggest_style_bandana = "Pull your neckerchief up / down",
 }

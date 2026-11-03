@@ -6,7 +6,7 @@ lua54 'yes'
 name 'fks-character'
 author 'Fonkas'
 description 'Multicharacter, character creator and starter experience for RedM (VORP)'
-version '1.1.3'
+version '1.1.4'
 license 'GPL-2.0' -- see LICENSE
 -- fks-character  Copyright (C) 2026 Fonkas
 

@@ -80,6 +80,7 @@ local function applyComponent(ped, key, value)
 end
 
 Look.Component = applyComponent
+Look.Tint = applyTint
 
 -- camadas que costumam ficar por baixo quando se aplica outra peça por cima
 Look.Layered = { "Shirt", "Vest", "Boots" }

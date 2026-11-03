@@ -87,6 +87,34 @@ local function restoreTo(back)
     SetPlayerInvincible(PlayerId(), false)
 end
 
+local function invoke(hash, ...)
+    local ok, res = pcall(Citizen.InvokeNative, hash, ...)
+    if ok then return res end
+end
+
+-- o que se sabe sobre o jogador escondido (para os logs)
+local function hiddenInfo(ped)
+    local control = invoke(0x7964097FCE4C244B, PlayerId(), Citizen.ResultAsInteger())       -- IsPlayerControlOn
+    local concealed = invoke(0x919B3C98ED8292F9, PlayerId(), Citizen.ResultAsInteger())     -- NetworkIsPlayerConcealed
+    local alpha = invoke(0x1BB501624FAF2BEA, ped, Citizen.ResultAsInteger())                -- GetEntityAlpha
+    return ("controlo %s, escondido na rede %s, alpha %s, modelo %s"):format(
+        control == nil and "?" or tostring(control ~= 0), concealed == nil and "?" or tostring(concealed ~= 0),
+        tostring(alpha), CurrentSkin and (GetEntityModel(ped) == joaat(CurrentSkin.sex) and "ok" or "errado") or "?")
+end
+
+local function showPlayer(ped)
+    SetEntityVisible(ped, true)
+    invoke(0x744B9EF44779D9AB, ped)                       -- ResetEntityAlpha
+    invoke(0xBBDF066252829606, PlayerId(), false, false)  -- NetworkConcealPlayer
+    -- o spawnmanager, quando esconde, também congela e tira a colisão e o controlo
+    if invoke(0x7964097FCE4C244B, PlayerId(), Citizen.ResultAsInteger()) == 0 then
+        FreezeEntityPosition(ped, false)
+        SetEntityCollision(ped, true, true)
+        SetPlayerControl(PlayerId(), true, 0)
+        SetPlayerInvincible(PlayerId(), false)
+    end
+end
+
 local function recover(reason)
     if recovering then return end
     recovering = true
@@ -189,12 +217,37 @@ AddEventHandler("fks-character:client:characterLoaded", function()
                         :format(wrongModel and "errado" or "ok", naked and "0" or "ok"))
                     ReloadLook()
                 end
-                if not IsEntityVisible(ped) and IsScreenFadedIn() then
-                    fixes = fixes + 1
-                    print("^3[fks-character] personagem invisível depois de entrar - a mostrar^7")
-                    SetEntityVisible(ped, true)
+            end
+        end
+    end)
+
+    -- visibilidade: há servidores onde algo volta a esconder o jogador depois de entrar
+    -- (ex.: um spawn do spawnmanager a meio, que congela e esconde). Enquanto durar a janela,
+    -- o jogador é mostrado sempre que fique invisível, e fica registado o que se viu.
+    CreateThread(function()
+        local untilTime = GetGameTimer() + (Config.Session.VisibilityGuard or 60000)
+        local count, checkedBucket = 0, false
+        while GetGameTimer() < untilTime and SpawnGuard.inWorld do
+            Wait(250)
+            local ped = PlayerPedId()
+            if not Scene.active and not recovering and DoesEntityExist(ped) and not IsEntityDead(ped)
+                and IsScreenFadedIn() and not IsEntityVisible(ped) then
+                count = count + 1
+                if count <= 5 or count % 20 == 0 then
+                    print(("^3[fks-character] personagem invisível depois de entrar (%dx, %s) - a mostrar^7"):format(count, hiddenInfo(ped)))
+                end
+                showPlayer(ped)
+                if not checkedBucket then
+                    checkedBucket = true
+                    CreateThread(function()
+                        local res = ServerCall("respawnfix")
+                        print(("^3[fks-character] routing bucket confirmado: %s^7"):format(res and tostring(res.bucket) or "sem resposta"))
+                    end)
                 end
             end
+        end
+        if count > 1 then
+            print(("^1[fks-character] a personagem foi escondida %d vezes depois de entrar: outro recurso está a esconder o jogador (SetEntityVisible / spawnmanager).^7"):format(count))
         end
     end)
 end)
