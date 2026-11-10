@@ -445,3 +445,36 @@ if Config.DevMode then
         openSelection(src, true)
     end, false)
 end
+
+-- =====================================================================
+--  AVISO: OUTRO MULTICHARACTER A CORRER
+-- =====================================================================
+-- Dois recursos a tratar das personagens partem a seleção (spawns duplicados, jogador invisível...).
+-- Compara-se pelo nome real do recurso: GetResourceState("vorp_character") podia responder por nós (provide).
+local OTHER_PROVIDERS = { "vorp_character", "vorp_character-lua", "syn_charcreator", "syn_multicharacter" }
+
+local function warnProvider(name)
+    print(("^1[fks-character] WARNING: '%s' is also started. fks-character already provides the characters " ..
+        "(it replaces vorp_character). Do not run two character providers at the same time: remove " ..
+        "'ensure %s' from server.cfg.^7"):format(name, name))
+end
+
+local function isOtherProvider(name)
+    if name == GetCurrentResourceName() then return false end
+    for _, other in ipairs(OTHER_PROVIDERS) do
+        if name == other then return true end
+    end
+    return false
+end
+
+CreateThread(function()
+    Wait(5000) -- deixar os outros recursos arrancarem
+    for i = 0, GetNumResources() - 1 do
+        local name = GetResourceByFindIndex(i)
+        if name and isOtherProvider(name) and GetResourceState(name) == "started" then warnProvider(name) end
+    end
+end)
+
+AddEventHandler("onResourceStart", function(name)
+    if isOtherProvider(name) and GetGameTimer() > 10000 then warnProvider(name) end
+end)

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.5
+- **Fixed: character blinking for about a minute after spawning on slow PCs.** The visibility guard started while
+  vorp_core was still loading the world and kept fighting it. It now waits until vorp_core says the player is in
+  session and the screen has faded in (15 s timeout, then 1 s extra). Only one guard runs at a time.
+  A short invisibility with no other signs (alpha 255, not network-concealed, player control on, correct model) is
+  ignored: the guard only steps in after 5 s in a row, or after 1 s when there are clear signs. It only resets
+  alpha / network concealment when they are actually wrong.
+- **Fixed: pressing Enter right after the selection opens could leave an existing character invisible or stuck
+  in the moonshine shack.** Before handing over to vorp_core, it waits (up to 12 s) for the earlier teleport to finish,
+  then teleports the player to the saved coordinates. New characters (train arrival) are unchanged.
+- Debug logs show the time since the character was selected (`+Nms`).
+- The server console warns when another character provider (`vorp_character`, `syn_charcreator`, ...) is also
+  started. It only warns and doesn't stop anything.
+
 ## 1.1.4
 - **Invisible character after spawning:** on some servers something hides the player again right after the
   character enters the world. The old check showed the character only 3 times and then gave up. For 60 s after

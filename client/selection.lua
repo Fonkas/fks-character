@@ -292,6 +292,7 @@ function LoadCharacterIntoWorld(res, isNew)
     end)
 
     SpawnGuard.loading = true
+    if isNew or not SpawnGuard.selectedAt then SpawnGuard.selectedAt = GetGameTimer() end
     SpawnGuard.Log("a carregar a personagem", res.charId, isNew and "(nova)" or "")
 
     CurrentSkin = res.skin
@@ -353,6 +354,19 @@ function LoadCharacterIntoWorld(res, isNew)
         end
     end
 
+    -- Personagem existente com Enter logo a seguir à seleção abrir: num PC lento o teleporte para a
+    -- destilaria (Scene.Enter) pode ainda estar ativo e acabar depois do handoff, deixando o jogador
+    -- preso lá dentro. Esperar que acabe e levar o jogador às coordenadas guardadas antes do VORP.
+    if not isNew then
+        local deadline = GetGameTimer() + 12000
+        while IsPlayerTeleportActive() and GetGameTimer() < deadline do Wait(0) end
+        if IsPlayerTeleportActive() then
+            print("^3[fks-character] teleporte anterior ainda ativo ao fim de 12 s - a continuar^7")
+        end
+        Scene.Teleport(vector4(c.x + 0.0, c.y + 0.0, c.z + 0.0, heading + 0.0))
+        SpawnGuard.Log("teleporte para as coordenadas guardadas feito")
+    end
+
     Scene.SetExternalHud(true)
     SpawnGuard.SetPosition(c.x, c.y, c.z, heading)
     TriggerEvent("vorp:initCharacter", vector3(c.x, c.y, c.z), heading + 0.0, res.isDead == true)
@@ -366,6 +380,7 @@ end
 function Selection.Play(charId)
     if Selection.busy then return { ok = false, error = "err_busy" } end
     Selection.busy = true
+    SpawnGuard.selectedAt = GetGameTimer()
     UI.Loading(L("sel_loading"))
 
     local res = ServerCall("select", { charId = charId })

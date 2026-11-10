@@ -13,9 +13,15 @@ SpawnGuard = { inWorld = false, loading = false }
 local lastPos = nil       -- vector4 da última posição boa no mundo
 local pendingFix = false  -- spawn durante o carregamento: repor quando a personagem entrar no mundo
 local recovering = false
+local visibilityToken = 0 -- só um guarda de visibilidade ativo de cada vez
+
+-- tempo desde que a personagem foi escolhida (para os logs)
+local function sinceSelection()
+    return SpawnGuard.selectedAt and (" +%dms"):format(GetGameTimer() - SpawnGuard.selectedAt) or ""
+end
 
 local function log(...)
-    if Config.Debug then print(("^5[fks-character:spawn %d]^7"):format(GetGameTimer()), ...) end
+    if Config.Debug then print(("^5[fks-character:spawn %d%s]^7"):format(GetGameTimer(), sinceSelection()), ...) end
 end
 SpawnGuard.Log = log
 
@@ -55,7 +61,9 @@ end
 -- A seleção vai reabrir (relog / /fkschars): esquecer a personagem anterior
 function SpawnGuard.Reset()
     SpawnGuard.inWorld, SpawnGuard.loading = false, false
+    SpawnGuard.selectedAt = nil
     lastPos, pendingFix = nil, false
+    visibilityToken = visibilityToken + 1
 end
 
 -- =====================================================================
@@ -93,21 +101,37 @@ local function invoke(hash, ...)
 end
 
 -- o que se sabe sobre o jogador escondido (para os logs)
-local function hiddenInfo(ped)
+local function hiddenState(ped)
     local control = invoke(0x7964097FCE4C244B, PlayerId(), Citizen.ResultAsInteger())       -- IsPlayerControlOn
     local concealed = invoke(0x919B3C98ED8292F9, PlayerId(), Citizen.ResultAsInteger())     -- NetworkIsPlayerConcealed
     local alpha = invoke(0x1BB501624FAF2BEA, ped, Citizen.ResultAsInteger())                -- GetEntityAlpha
-    return ("controlo %s, escondido na rede %s, alpha %s, modelo %s"):format(
-        control == nil and "?" or tostring(control ~= 0), concealed == nil and "?" or tostring(concealed ~= 0),
-        tostring(alpha), CurrentSkin and (GetEntityModel(ped) == joaat(CurrentSkin.sex) and "ok" or "errado") or "?")
+    return {
+        control = control == nil and nil or control ~= 0,
+        concealed = concealed == nil and nil or concealed ~= 0,
+        alpha = alpha,
+        modelOk = not CurrentSkin or GetEntityModel(ped) == joaat(CurrentSkin.sex),
+    }
 end
 
-local function showPlayer(ped)
+-- há sinais claros de que algo escondeu o jogador (não é só o IsEntityVisible)
+local function strongSigns(st)
+    return st.control == false or st.concealed == true or (st.alpha and st.alpha < 255) or not st.modelOk
+end
+
+-- o que se sabe sobre o jogador escondido (para os logs)
+local function hiddenInfo(st)
+    return ("controlo %s, escondido na rede %s, alpha %s, modelo %s"):format(
+        st.control == nil and "?" or tostring(st.control), st.concealed == nil and "?" or tostring(st.concealed),
+        tostring(st.alpha), st.modelOk and "ok" or "errado")
+end
+
+local function showPlayer(ped, st)
     SetEntityVisible(ped, true)
-    invoke(0x744B9EF44779D9AB, ped)                       -- ResetEntityAlpha
-    invoke(0xBBDF066252829606, PlayerId(), false, false)  -- NetworkConcealPlayer
+    -- só mexer no que está mesmo mal (repor sempre o alpha / a rede também faz piscar)
+    if st.alpha and st.alpha < 255 then invoke(0x744B9EF44779D9AB, ped) end           -- ResetEntityAlpha
+    if st.concealed then invoke(0xBBDF066252829606, PlayerId(), false, false) end     -- NetworkConcealPlayer
     -- o spawnmanager, quando esconde, também congela e tira a colisão e o controlo
-    if invoke(0x7964097FCE4C244B, PlayerId(), Citizen.ResultAsInteger()) == 0 then
+    if st.control == false then
         FreezeEntityPosition(ped, false)
         SetEntityCollision(ped, true, true)
         SetPlayerControl(PlayerId(), true, 0)
@@ -223,27 +247,51 @@ AddEventHandler("fks-character:client:characterLoaded", function()
 
     -- visibilidade: há servidores onde algo volta a esconder o jogador depois de entrar
     -- (ex.: um spawn do spawnmanager a meio, que congela e esconde). Enquanto durar a janela,
-    -- o jogador é mostrado sempre que fique invisível, e fica registado o que se viu.
+    -- o jogador é mostrado quando fique invisível, e fica registado o que se viu.
+    visibilityToken = visibilityToken + 1
+    local token = visibilityToken
     CreateThread(function()
+        -- Só depois de o vorp_core acabar o spawn: enquanto carrega o mundo, o jogador pode estar
+        -- escondido de propósito e mostrá-lo aí fazia-o piscar. Sem sinal do VORP, arranca aos 15 s.
+        local deadline = GetGameTimer() + 15000
+        while GetGameTimer() < deadline and token == visibilityToken
+            and not (LocalPlayer.state.IsInSession and IsScreenFadedIn()) do
+            Wait(250)
+        end
+        Wait(1000)
+        if token ~= visibilityToken then return end
+        log("guarda de visibilidade ativo", "sinal do VORP", LocalPlayer.state.IsInSession and IsScreenFadedIn())
+
         local untilTime = GetGameTimer() + (Config.Session.VisibilityGuard or 60000)
-        local count, checkedBucket = 0, false
-        while GetGameTimer() < untilTime and SpawnGuard.inWorld do
+        local count, checkedBucket, hiddenSince = 0, false, nil
+        while GetGameTimer() < untilTime and SpawnGuard.inWorld and token == visibilityToken do
             Wait(250)
             local ped = PlayerPedId()
             if not Scene.active and not recovering and DoesEntityExist(ped) and not IsEntityDead(ped)
                 and IsScreenFadedIn() and not IsEntityVisible(ped) then
-                count = count + 1
-                if count <= 5 or count % 20 == 0 then
-                    print(("^3[fks-character] personagem invisível depois de entrar (%dx, %s) - a mostrar^7"):format(count, hiddenInfo(ped)))
+                local now = GetGameTimer()
+                hiddenSince = hiddenSince or now
+                local st = hiddenState(ped)
+                -- invisível por pouco tempo e sem outros sinais (alpha 255, não escondido na rede,
+                -- com controlo, modelo ok) não conta: só se age se durar 5 s seguidos
+                if now - hiddenSince >= (strongSigns(st) and 1000 or 5000) then
+                    count = count + 1
+                    if count <= 5 or count % 20 == 0 then
+                        print(("^3[fks-character] personagem invisível depois de entrar (%dx,%s %s) - a mostrar^7")
+                            :format(count, sinceSelection(), hiddenInfo(st)))
+                    end
+                    showPlayer(ped, st)
+                    hiddenSince = nil
+                    if not checkedBucket then
+                        checkedBucket = true
+                        CreateThread(function()
+                            local res = ServerCall("respawnfix")
+                            print(("^3[fks-character] routing bucket confirmado: %s^7"):format(res and tostring(res.bucket) or "sem resposta"))
+                        end)
+                    end
                 end
-                showPlayer(ped)
-                if not checkedBucket then
-                    checkedBucket = true
-                    CreateThread(function()
-                        local res = ServerCall("respawnfix")
-                        print(("^3[fks-character] routing bucket confirmado: %s^7"):format(res and tostring(res.bucket) or "sem resposta"))
-                    end)
-                end
+            else
+                hiddenSince = nil
             end
         end
         if count > 1 then
